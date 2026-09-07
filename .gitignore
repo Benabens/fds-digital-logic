@@ -1,0 +1,14 @@
+# Sorties de simulation
+build/
+*.vvp
+*.vcd
+*.out
+
+# macOS
+.DS_Store
+
+# Scripts locaux de publication (non liés au projet)
+fds-daily.sh
+fds-auto.sh
+.fds-last-push
+.fds-daily.log
