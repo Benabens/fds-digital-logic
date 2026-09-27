@@ -1,63 +1,107 @@
 # fds-digital-logic
 
-**Bibliothèque de logique numérique en Verilog** — 42 modules synthétisables, chacun accompagné d'un banc d'essai auto-vérifiant, couvrant la chaîne complète qui va de la porte logique au banc de registres d'un processeur.
+**A digital-logic library in Verilog** — 42 synthesizable modules, each with a
+self-checking testbench, covering the whole chain from the logic gate to a processor's
+register file.
 
-Projet personnel construit autour du cours **CS-173 — Fundamentals of Digital Systems** (EPFL, BA2). Ce n'est pas un projet noté : c'est une reprise des notions du cours, consolidée et poussée bien au-delà des exercices, avec une vérification systématique par simulation.
+A personal project built around the course **CS-173 — Fundamentals of Digital Systems**
+(EPFL, second year). It is not a graded project: it revisits the course material,
+consolidated and taken well beyond the exercises, with systematic verification by
+simulation.
 
-> `Verilog-2005` · 42 modules · 42 bancs d'essai · **42/42 verts** · zéro avertissement `iverilog -Wall`
+> `Verilog-2005` · 42 modules · 42 testbenches · **42/42 passing** · zero `iverilog -Wall` warnings
+
+> **Status:** modules are being added to this repository progressively; the complete
+> library has been simulated end to end locally with `run_all.sh`.
 
 ---
 
-## Vérifier soi-même
+## Check it yourself
 
 ```bash
-brew install icarus-verilog     # macOS ; sinon : apt install iverilog
-./run_all.sh                    # compile et simule les 42 bancs
-./run_all.sh counter            # ou un sous-ensemble, par motif
+brew install icarus-verilog     # macOS; otherwise: apt install iverilog
+./run_all.sh                    # compiles and simulates every testbench
+./run_all.sh counter            # or a subset, by pattern
 ```
 
-Le script rend un code de sortie non nul si un seul banc échoue — il est utilisable tel quel en intégration continue.
+The script exits with a non-zero code if a single testbench fails, so it can be used as-is
+in continuous integration.
 
-## Ce que couvre la bibliothèque
+## What the library covers
 
-### Combinatoire — `src/combinational/` (24 modules)
+### Combinational — `src/combinational/` (24 modules)
 
-**Addition et soustraction.** `half_adder` et `full_adder` (décrits en structurel, par instanciation de portes) servent de briques au `ripple_carry_adder` paramétré. Le `carry_lookahead_adder4` reprend le même calcul avec les signaux de génération `g = a·b` et de propagation `p = a⊕b`, faisant tomber le délai de O(N) à O(log N) — son banc d'essai le fait tourner **en parallèle** d'un `ripple_carry_adder` pour prouver l'équivalence fonctionnelle sur les 512 vecteurs. L'`adder_subtractor` exploite l'identité `a − b = a + ¬b + 1` du complément à 2 et expose les quatre drapeaux ; son débordement **signé** est vérifié non pas par la formule `carry[N] ⊕ carry[N−1]` mais par sa définition (« le résultat exact sort-il de l'intervalle représentable ? »), pour éviter de tester une formule contre elle-même.
+**Addition and subtraction.** `half_adder` and `full_adder` (described structurally, by
+instantiating gates) are the building blocks of the parameterised `ripple_carry_adder`. The
+`carry_lookahead_adder4` computes the same thing with generate `g = a·b` and propagate
+`p = a⊕b` signals, bringing the delay down from O(N) to O(log N) — its testbench runs it
+**side by side** with a `ripple_carry_adder` to prove functional equivalence over all 512
+vectors. The `adder_subtractor` uses the two's-complement identity `a − b = a + ¬b + 1` and
+exposes the four flags; its **signed** overflow is checked not with the formula
+`carry[N] ⊕ carry[N−1]` but with its definition ("does the exact result fall outside the
+representable range?"), so the testbench never checks a formula against itself.
 
-**Sélection et décodage.** Multiplexeurs 2, 4, 8 vers 1 et un `mux_param` générique en 2^SEL vers 1 ; démultiplexeur ; décodeurs 2→4, 3→8, et un 4→16 construit hiérarchiquement à partir de deux 3→8 ; encodeur simple et encodeur **prioritaire**.
+**Selection and decoding.** 2-, 4- and 8-to-1 multiplexers and a generic 2^SEL-to-1
+`mux_param`; a demultiplexer; 2→4 and 3→8 decoders, plus a 4→16 decoder built
+hierarchically from two 3→8 decoders; a plain encoder and a **priority** encoder.
 
-**Codes et manipulation de bits.** `barrel_shifter` en log2(N) étages de multiplexeurs (décalages logiques et arithmétique, avec l'astuce du miroir pour le sens gauche), conversions `binary_to_gray` / `gray_to_binary`, `parity_checker`, `bcd_adder` avec sa correction +6, `seven_segment_decoder`, comparateurs et `absolute_difference`.
+**Codes and bit manipulation.** A `barrel_shifter` in log2(N) stages of multiplexers
+(logical and arithmetic shifts, with the mirroring trick for left shifts),
+`binary_to_gray` / `gray_to_binary` conversions, a `parity_checker`, a `bcd_adder` with its
++6 correction, a `seven_segment_decoder`, comparators and `absolute_difference`.
 
-### Séquentiel — `src/sequential/` (15 modules)
+### Sequential — `src/sequential/` (15 modules)
 
-La progression du cours : verrous (`sr_latch` sur portes NOR croisées, `d_latch` transparent sur niveau), puis bascules sur front (`d_flip_flop` en reset synchrone **et** asynchrone, `t_flip_flop` et `jk_flip_flop` bâties par instanciation d'une bascule D), puis les circuits qui en découlent — registre, registre à décalage, compteurs haut/bas et modulo N, compteur en anneau et sa variante Johnson.
+Following the course's progression: latches (`sr_latch` on cross-coupled NOR gates,
+level-transparent `d_latch`), then edge-triggered flip-flops (`d_flip_flop` with
+synchronous **and** asynchronous reset, `t_flip_flop` and `jk_flip_flop` built by
+instantiating a D flip-flop), then the circuits built on them — register, shift register,
+up/down and modulo-N counters, a ring counter and its Johnson variant.
 
-Enfin les **machines à états** : le même détecteur de séquence `1011` implémenté en **Moore** (5 états) et en **Mealy** (4 états), pour rendre la différence tangible — Mealy réagit un cycle plus tôt avec moins d'états. Plus un contrôleur de feux de circulation à durées paramétrables et un anti-rebond de bouton mécanique.
+Finally, **state machines**: the same `1011` sequence detector implemented as a **Moore**
+machine (5 states) and a **Mealy** machine (4 states), to make the difference tangible —
+Mealy reacts one cycle earlier with fewer states. Plus a traffic-light controller with
+configurable durations and a push-button debouncer.
 
-### Mémoire — `src/memory/` (3 modules)
+### Memory — `src/memory/` (3 modules)
 
-`register_file` reproduit le banc de registres d'un **RV32I** : 32 × 32 bits, deux ports de lecture asynchrones, un port d'écriture synchrone, et le registre `x0` câblé à zéro y compris en écriture. Complété par une RAM synchrone et une ROM combinatoire, toutes deux paramétrées.
+`register_file` reproduces an **RV32I** register file: 32 × 32 bits, two asynchronous read
+ports, one synchronous write port, and register `x0` hard-wired to zero, writes included.
+Completed by a synchronous RAM and a combinational ROM, both parameterised.
 
-## Sur la qualité des bancs d'essai
+## On testbench quality
 
-Un test qui passe ne prouve rien s'il ne peut pas échouer. Trois principes ont été appliqués :
+A passing test proves nothing if it cannot fail. Three principles were applied:
 
-1. **Balayage exhaustif** partout où le domaine le permet — les 512 vecteurs du plein additionneur 4 bits, les 4096 du comparateur 6 bits, les 19968 du multiplexeur générique, les 16 valeurs du décodeur 7 segments.
-2. **Références indépendantes** : le résultat attendu est recalculé par un chemin différent de celui testé (arithmétique entière de Verilog, opérateurs `<<` `>>` `>>>`, reconstruction des glyphes segment par segment, aller-retour Gray↔binaire), jamais recopié depuis la logique du module.
-3. **Test de mutation** : chaque module a été délibérément cassé dans une copie jetable pour vérifier que son banc le détecte — un banc qui reste vert sur du code fauté ne teste rien.
+1. **Exhaustive sweeps** wherever the domain allows — the 512 vectors of the 4-bit adder,
+   the 4,096 of the 6-bit comparator, the 19,968 of the generic multiplexer, the 16 values
+   of the seven-segment decoder.
+2. **Independent references**: the expected result is recomputed through a different path
+   from the one under test (Verilog integer arithmetic, the `<<` `>>` `>>>` operators,
+   glyphs rebuilt segment by segment, Gray↔binary round trips), never copied from the
+   module's own logic.
+3. **Mutation testing**: faults were deliberately injected into a sample of modules, in
+   throwaway copies, to confirm that the corresponding testbench catches them — a
+   testbench that stays green on faulty code tests nothing.
 
-## Organisation
+## Layout
 
 ```
 src/combinational/   24 modules
 src/sequential/      15 modules
 src/memory/           3 modules
-tb/                  42 bancs d'essai (un par module)
-run_all.sh           compilation + simulation de l'ensemble
+tb/                  42 testbenches (one per module)
+run_all.sh           compiles and simulates everything
 ```
 
-Chaque fichier porte un en-tête expliquant le rôle du module, son équation ou sa table de transition, et la raison d'être du circuit — l'intention est que le dépôt se lise comme un support de révision, pas seulement comme du code.
+Every file carries a header explaining the module's role, its equation or transition
+table, and why the circuit exists — the intent is for the repository to read as revision
+material, not just as code.
 
-## Contexte
+## Context
 
-Cours CS-173 donné par la Prof. Mirjana Stojilović à l'EPFL. Le programme couvre les systèmes de nombres (complément à 2, codes de Gray et BCD, virgule fixe et flottante), les circuits logiques (algèbre de Boole, additionneurs rapides, bascules, machines à états, mémoire) et une introduction à l'architecture des ordinateurs (jeu d'instructions RV32I). Ce dépôt matérialise le deuxième bloc et amorce le troisième.
+CS-173 is taught by Prof. Mirjana Stojilović at EPFL. The syllabus covers number systems
+(two's complement, Gray and BCD codes, fixed and floating point), logic circuits (Boolean
+algebra, fast adders, flip-flops, state machines, memory) and an introduction to computer
+architecture (the RV32I instruction set). This repository covers the second block and
+starts on the third.
